@@ -6,47 +6,66 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-class DataStoreManager(privtae val context: Context){
+class DataStoreManager(private val context: Context) {
+
     private val Context.dataStore by preferencesDataStore("session_preferences")
 
-    companion object{
+    companion object {
         val IS_LOGGED_IN = booleanPreferencesKey("is_logged_in")
-        val USERNAME = stringPreferencesKey("ussername")
-        val BIOMETRICS_ACTIVE = booleanPreferencesKey("biometrics")
+        val USERNAME = stringPreferencesKey("username")
+        val BIOMETRICS_ACTIVE = booleanPreferencesKey("biometrics_active")
     }
 
-    val isLoggedinFlow: Flow<Boolean> = context.dataStore.data.map{
-        it[IS_LOGGED_IN] ?: false
-    }
-    val usernameFlow: Flow<String> = context.dataStore.data.map {
-        it[USERNAME] ?: ""
-    }
-    val biometricsFlow: Flow<Boolean> = context.dataStore.data.map {
-        it[BIOMETRICS_ACTIVE] ?: false
+    val isLoggedInFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[IS_LOGGED_IN] ?: false
     }
 
-    suspend fun saveSession(username: String){
-        context.dataStore.edit {
-            it[USERNAME] = username
-            it[IS_LOGGED_IN] = true
+    val usernameFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[USERNAME] ?: ""
+    }
+
+    val biometricsFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[BIOMETRICS_ACTIVE] ?: false
+    }
+
+    suspend fun saveSession(username: String, biometricsEnabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USERNAME] = username
+            preferences[IS_LOGGED_IN] = true
+            preferences[BIOMETRICS_ACTIVE] = biometricsEnabled
         }
     }
 
-    suspend fun activeBiometrics(active: Boolean){
-        context.dataStore.edit { it[BIOMETRICS_ACTIVE] = active }
-    }
-
-    suspend fun logout(){
-        context.dataStore.edit {
-            it[IS_LOGGED_IN] = false
+    suspend fun setBiometricsActive(active: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[BIOMETRICS_ACTIVE] = active
         }
     }
 
-    suspend fun loginWithBiometrics(){
-        context.dataStore.edit {
-            it[IS_LOGGED_IN] = true
+    suspend fun logout() {
+        val biometricsEnabled = biometricsFlow.first()
+
+        context.dataStore.edit { preferences ->
+            preferences[IS_LOGGED_IN] = false
+
+            if (!biometricsEnabled) {
+                preferences[USERNAME] = ""
+                preferences[BIOMETRICS_ACTIVE] = false
+            }
         }
+    }
+
+    suspend fun loginWithBiometrics() {
+        context.dataStore.edit { preferences ->
+            preferences[IS_LOGGED_IN] = true
+        }
+    }
+
+    suspend fun hasStoredCredentials(): Boolean {
+        val username = usernameFlow.first()
+        return username.isNotEmpty()
     }
 }
